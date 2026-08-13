@@ -18,9 +18,9 @@ from pyrogram.errors import FloodWait
 # ──────────────────────────────────────────────
 # @UseMasterUpdate — Bot Configuration
 # ──────────────────────────────────────────────
-API_ID    = int(os.environ.get("API_ID", 0))
-API_HASH  = os.environ.get("API_HASH", "")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "")
+API_ID    = int(os.environ.get("API_ID", 31606811))
+API_HASH  = os.environ.get("API_HASH", "36e6d64e83ee00422c8ba535a60eaa99")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8842995893:AAGt6DuM7ncBDH-hjQvM1-nLohgY1apRgDo")
 
 OUTPUT_FOLDER = "downloads"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
