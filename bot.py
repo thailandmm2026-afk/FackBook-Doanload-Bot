@@ -20,7 +20,7 @@ from pyrogram.errors import FloodWait
 # ──────────────────────────────────────────────
 API_ID    = int(os.environ.get("API_ID", 31606811))
 API_HASH  = os.environ.get("API_HASH", "36e6d64e83ee00422c8ba535a60eaa99")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8842995893:AAGt6DuM7ncBDH-hjQvM1-nLohgY1apRgDo")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8949419758:AAHyzfi7Y8o2zZAhqQh7hByBVyrvt4in0XI")
 
 OUTPUT_FOLDER = "downloads"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
@@ -213,7 +213,7 @@ async def download_with_progress(
         resp = requests.get(url, headers=DOWNLOAD_HEADERS, stream=True, timeout=60)
         resp.raise_for_status()
     except Exception as e:
-        await safe_edit(status_msg, f"❌ Download request failed:\n`{e}`\n\n— {CREDIT}")
+        await safe_edit(status_msg, f"❌ Download လုပ်ရာတွင် မအောင်မြင်ပါ:\n`{e}`\n\n— {CREDIT}")
         return False
 
     total = int(resp.headers.get("content-length", 0))
@@ -339,13 +339,13 @@ async def handle_fb_link(client: Client, message: Message) -> None:
     )
 
     # ── Step 1: Extract stream URLs (runs in thread, not blocking) ──
-    await safe_edit(status, f"🔗 **Extracting stream URLs...**\n\n— {CREDIT}")
+    await safe_edit(status, f"🔗 **URL မှ Videoကို ထုတ်ယူနေပါသည် ...**\n\n— {CREDIT}")
     try:
         video_url, audio_url, video_id = await asyncio.to_thread(
             _extract_fb_links_sync, url
         )
     except ValueError as e:
-        await safe_edit(status, f"❌ **Extraction failed:**\n`{e}`\n\n— {CREDIT}")
+        await safe_edit(status, f"❌ **ထုတ်ယူရာတွင် မအောင်မြင်ပါ:**\n`{e}`\n\n— {CREDIT}")
         return
 
     # File paths — @UseMasterUpdate
@@ -355,12 +355,12 @@ async def handle_fb_link(client: Client, message: Message) -> None:
     thumb     = os.path.join(OUTPUT_FOLDER, f"{video_id}.jpg")
 
     # ── Step 2: Download video stream ──
-    ok = await download_with_progress(video_url, raw_video, status, "Downloading Video Stream")
+    ok = await download_with_progress(video_url, raw_video, status, "Video အား Download လုပ်နေပါသည်....")
     if not ok:
         return
 
     # ── Step 3: Download audio stream ──
-    ok = await download_with_progress(audio_url, raw_audio, status, "Downloading Audio Stream")
+    ok = await download_with_progress(audio_url, raw_audio, status, "Audio အား Download လုပ်နေပါသည်......")
     if not ok:
         try: os.remove(raw_video)
         except: pass
@@ -385,7 +385,7 @@ async def handle_fb_link(client: Client, message: Message) -> None:
     duration, width, height = await asyncio.to_thread(get_video_metadata, merged)
 
     # ── Step 7: Upload ──
-    await safe_edit(status, f"📤 **Starting upload...**\n\n— {CREDIT}")
+    await safe_edit(status, f"📤 **ပေးပို့ခြင်း စတင်လုပ်ဆောင်နေပါသည်...**\n\n— {CREDIT}")
     loop = asyncio.get_event_loop()
 
     try:
@@ -397,7 +397,7 @@ async def handle_fb_link(client: Client, message: Message) -> None:
             width=width,
             height=height,
             caption=(
-                f"✅ **Facebook Video**\n"
+                f"✅ **Facebook Video အား အောင်မြင်စွာ Downloadနိုင်ခဲ့သည်**\n"
                 f"🆔 `{video_id}`\n"
                 f"⏱ `{duration}s`  📐 `{width}×{height}`\n\n"
                 f"— {CREDIT}"
@@ -405,9 +405,9 @@ async def handle_fb_link(client: Client, message: Message) -> None:
             supports_streaming=True,
             progress=make_upload_cb(status, loop),
         )
-        await status.edit_text(f"✅ **Uploaded successfully!**\n\n— {CREDIT}")
+        await status.edit_text(f"✅ **ပေးပို့ခြင်း အောင်မြင်ပါသည်!**\n\n— {CREDIT}")
     except Exception as e:
-        await safe_edit(status, f"❌ **Upload error:**\n`{e}`\n\n— {CREDIT}")
+        await safe_edit(status, f"❌ **ပေးပို့မရပါ တခုခုမှားယွင်းနေပါသည်:**\n`{e}`\n\n— {CREDIT}")
     finally:
         for f in [merged, thumb]:
             try: os.remove(f)
@@ -435,7 +435,7 @@ async def cmd_start(_, message: Message):
 @app.on_message(filters.command("help"))
 async def cmd_help(_, message: Message):
     await message.reply_text(
-        "📖 **Usage:** Just paste a Facebook video URL.\n\n"
+        "📖 **အသုံးပြုနည်း:**Facebook video URL အား ပေးပို့ပါ\n\n"
         "Supports:\n"
         "• `facebook.com/watch?v=...`\n"
         "• `fb.watch/...`\n"
