@@ -25,10 +25,9 @@ BOT_TOKEN = os.environ.get("BOT_TOKEN", "8842995893:AAGt6DuM7ncBDH-hjQvM1-nLohgY
 OUTPUT_FOLDER = "downloads"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
-CREDIT = "@UseMasterUpdate"
+CREDIT = "@KMM_MOD1"
 
 # ──────────────────────────────────────────────
-# Pyrogram Client — @UseMasterUpdate
 # ──────────────────────────────────────────────
 app = Client(
     "fb_bot",
@@ -419,11 +418,18 @@ async def handle_fb_link(client: Client, message: Message) -> None:
 # ──────────────────────────────────────────────
 @app.on_message(filters.command("start"))
 async def cmd_start(_, message: Message):
-    await message.reply_text(
-        "👋 **FB Video Downloader Bot**\n\n"
-        "Send any Facebook video link — I'll download and upload it here.\n\n"
+    text = (
+        "👋 **FB Video Downloader Bot မှ ကြိုဆိုပါတယ်!**\n\n"
+        "📥 **အသုံးပြုနည်း -**\n"
+        "မည်သည့် Facebook ဗီဒီယို Link ကိုမဆို ပေးပို့လိုက်ပါ\n"
+        "Bot မှ မြန်ဆန်စွာ ဒေါင်းလုဒ်ဆွဲပြီး ပြန်လည် ပေးပို့ပေးပါမည်။\n\n"
+        "⚡ **အင်္ဂါရပ်များ -**\n"
+        "• ဒေါင်းလုဒ်ပြုလုပ်ရာတွင် အလွန်မြန်ဆန်ခြင်း\n"
+        "• HD / SD ရုပ်ထွက် HD Quality ရရှိနိုင်ခြင်း\n"
+        "• ၁၀၀% အခမဲ့ အသုံးပြုနိုင်ခြင်း\n\n"
         f"— {CREDIT}"
     )
+
 
 @app.on_message(filters.command("help"))
 async def cmd_help(_, message: Message):
