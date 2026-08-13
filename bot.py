@@ -315,7 +315,7 @@ def make_upload_cb(status_msg: Message, loop: asyncio.AbstractEventLoop):
         last[0] = now
         bar = progress_bar(current, total)
         text = (
-            f"📤 **Uploading to Telegram...**\n"
+            f"📤 **Telegram သို့ပေးပို့နေပါသည်...**\n"
             f"{bar}\n"
             f"`{human_size(current)} / {human_size(total)}`\n\n"
             f"— {CREDIT}"
@@ -421,14 +421,15 @@ async def cmd_start(_, message: Message):
     text = (
         "👋 **FB Video Downloader Bot မှ ကြိုဆိုပါတယ်!**\n\n"
         "📥 **အသုံးပြုနည်း -**\n"
-        "မည်သည့် Facebook ဗီဒီယို Link ကိုမဆို ပေးပို့လိုက်ပါ\n"
-        "Bot မှ မြန်ဆန်စွာ ဒေါင်းလုဒ်ဆွဲပြီး ပြန်လည် ပေးပို့ပေးပါမည်။\n\n"
+        "မည်သည့် Facebook ဗီဒီယို Link ကိုမဆို ပေးပို့လိုက်ပါ — Bot မှ မြန်ဆန်စွာ ဒေါင်းလုဒ်ဆွဲပြီး ပြန်လည် ပေးပို့ပေးပါမည်။\n\n"
         "⚡ **အင်္ဂါရပ်များ -**\n"
         "• ဒေါင်းလုဒ်ပြုလုပ်ရာတွင် အလွန်မြန်ဆန်ခြင်း\n"
         "• HD / SD ရုပ်ထွက် HD Quality ရရှိနိုင်ခြင်း\n"
         "• ၁၀၀% အခမဲ့ အသုံးပြုနိုင်ခြင်း\n\n"
         f"— {CREDIT}"
     )
+    await message.reply_text(text)
+
 
 
 @app.on_message(filters.command("help"))
