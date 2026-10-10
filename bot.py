@@ -12,7 +12,7 @@ import asyncio
 import requests
 import subprocess
 from pyrogram import Client, filters
-from pyrogram.types import Message
+from pyrogram.types import Message, InlineKeyboardMarkup, InlineKeyboardButton, CallbackQuery
 from pyrogram.errors import FloodWait
 
 # ──────────────────────────────────────────────
@@ -20,12 +20,17 @@ from pyrogram.errors import FloodWait
 # ──────────────────────────────────────────────
 API_ID    = int(os.environ.get("API_ID", 31606811))
 API_HASH  = os.environ.get("API_HASH", "36e6d64e83ee00422c8ba535a60eaa99")
-BOT_TOKEN = os.environ.get("BOT_TOKEN", "8949419758:AAHyzfi7Y8o2zZAhqQh7hByBVyrvt4in0XI")
+BOT_TOKEN = os.environ.get("BOT_TOKEN", "8856046276:AAEv8aiGFuotIjA_byBcoed8-NPy_zVjvy4")
+# Channel to post videos/audio (bot must be admin). Example: -1001234567890
+CHANNEL_ID = os.environ.get("CHANNEL_ID", "-1004436727822")
 
 OUTPUT_FOLDER = "downloads"
 os.makedirs(OUTPUT_FOLDER, exist_ok=True)
 
 CREDIT = "@KMM_MOD1"
+
+# Pending caption edits: user_id -> (chat_id, message_id)
+pending_edits: dict[int, tuple[int, int]] = {}
 
 # ──────────────────────────────────────────────
 # ──────────────────────────────────────────────
@@ -35,6 +40,23 @@ app = Client(
     api_hash=API_HASH,
     bot_token=BOT_TOKEN,
 )
+
+# ──────────────────────────────────────────────
+# Inline keyboard helper — @UseMasterUpdate
+# ──────────────────────────────────────────────
+def media_keyboard(video_id: str, include_audio_btn: bool = True) -> InlineKeyboardMarkup:
+    """Buttons under video/audio messages."""
+    rows = []
+    if include_audio_btn:
+        rows.append([
+            InlineKeyboardButton("🔊 အသံ Download", callback_data=f"dl_audio:{video_id}")
+        ])
+    rows.append([
+        InlineKeyboardButton("✏️ Edit", callback_data=f"edit_cap:{video_id}"),
+        InlineKeyboardButton("📢 Post", callback_data=f"post_ch:{video_id}"),
+    ])
+    return InlineKeyboardMarkup(rows)
+
 
 # ──────────────────────────────────────────────
 # Utilities — @UseMasterUpdate
@@ -328,8 +350,13 @@ def make_upload_cb(status_msg: Message, loop: asyncio.AbstractEventLoop):
 # ──────────────────────────────────────────────
 # Main handler — @UseMasterUpdate
 # ──────────────────────────────────────────────
-@app.on_message(filters.text & ~filters.command(["start", "help"]))
+@app.on_message(filters.text & ~filters.command(["start", "help", "cancel"]))
 async def handle_fb_link(client: Client, message: Message) -> None:
+    # Skip if user is editing a caption
+    user_id = message.from_user.id if message.from_user else 0
+    if user_id in pending_edits:
+        return
+
     url = extract_fb_url(message.text)
     if not url:
         return
@@ -369,13 +396,40 @@ async def handle_fb_link(client: Client, message: Message) -> None:
     # ── Step 4: Merge ──
     await safe_edit(status, f"⚙️ **Merging streams with FFmpeg...**\n\n— {CREDIT}")
     ok = await asyncio.to_thread(merge_streams, raw_video, raw_audio, merged)
-    for f in [raw_video, raw_audio]:
-        try: os.remove(f)
-        except: pass
+    try:
+        os.remove(raw_video)
+    except Exception:
+        pass
 
     if not ok:
         await safe_edit(status, f"❌ **Merge failed.**\n\n— {CREDIT}")
+        try:
+            os.remove(raw_audio)
+        except Exception:
+            pass
         return
+
+    # Keep raw_audio for later "Download Audio" button
+    # Convert to .m4a for better Telegram audio support
+    audio_out = os.path.join(OUTPUT_FOLDER, f"{video_id}_audio.m4a")
+    try:
+        subprocess.run(
+            [
+                "ffmpeg", "-hide_banner", "-loglevel", "error",
+                "-i", raw_audio,
+                "-c", "copy",
+                "-y", audio_out,
+            ],
+            timeout=60,
+            check=True,
+        )
+        try:
+            os.remove(raw_audio)
+        except Exception:
+            pass
+    except Exception:
+        # Fallback: keep original if conversion fails
+        audio_out = raw_audio
 
     # ── Step 5: Thumbnail (random frame) ──
     await safe_edit(status, f"🖼️ **Capturing random thumbnail...**\n\n— {CREDIT}")
@@ -384,7 +438,7 @@ async def handle_fb_link(client: Client, message: Message) -> None:
     # ── Step 6: Metadata (duration fix) ──
     duration, width, height = await asyncio.to_thread(get_video_metadata, merged)
 
-    # ── Step 7: Upload ──
+    # ── Step 7: Upload video with Audio Download button ──
     await safe_edit(status, f"📤 **ပေးပို့ခြင်း စတင်လုပ်ဆောင်နေပါသည်...**\n\n— {CREDIT}")
     loop = asyncio.get_event_loop()
 
@@ -404,14 +458,158 @@ async def handle_fb_link(client: Client, message: Message) -> None:
             ),
             supports_streaming=True,
             progress=make_upload_cb(status, loop),
+            reply_markup=media_keyboard(video_id, include_audio_btn=True),
         )
         await status.edit_text(f"✅ **ပေးပို့ခြင်း အောင်မြင်ပါသည်!**\n\n— {CREDIT}")
     except Exception as e:
         await safe_edit(status, f"❌ **ပေးပို့မရပါ တခုခုမှားယွင်းနေပါသည်:**\n`{e}`\n\n— {CREDIT}")
+        # Clean audio if video send failed
+        try:
+            os.remove(audio_out)
+        except Exception:
+            pass
     finally:
         for f in [merged, thumb]:
-            try: os.remove(f)
-            except: pass
+            try:
+                os.remove(f)
+            except Exception:
+                pass
+        # Note: audio_out is kept for the button; cleaned up after download
+
+# ──────────────────────────────────────────────
+# Callback: Download Audio button — @UseMasterUpdate
+# ──────────────────────────────────────────────
+@app.on_callback_query(filters.regex(r"^dl_audio:"))
+async def cb_download_audio(client: Client, callback: CallbackQuery) -> None:
+    try:
+        video_id = callback.data.split(":", 1)[1]
+    except Exception:
+        await callback.answer("❌ Invalid request", show_alert=True)
+        return
+
+    audio_path = os.path.join(OUTPUT_FOLDER, f"{video_id}_audio.m4a")
+    # Also check original name in case conversion was skipped
+    if not os.path.exists(audio_path):
+        audio_path = os.path.join(OUTPUT_FOLDER, f"{video_id}_a.mp4")
+
+    if not os.path.exists(audio_path):
+        await callback.answer(
+            "❌ အသံဖိုင် မရှိတော့ပါ။ Video ကို ပြန် Download လုပ်ပြီး ထပ်ကြိုးစားပါ။",
+            show_alert=True,
+        )
+        return
+
+    await callback.answer("🔊 အသံကို ပို့နေပါသည်...")
+
+    try:
+        await client.send_audio(
+            chat_id=callback.message.chat.id,
+            audio=audio_path,
+            caption=(
+                f"🔊 **Facebook Audio**\n"
+                f"🆔 `{video_id}`\n\n"
+                f"— {CREDIT}"
+            ),
+            title=f"FB Audio {video_id}",
+            performer="Facebook",
+            reply_markup=media_keyboard(video_id, include_audio_btn=False),
+        )
+        # Remove audio button from original video after successful send
+        try:
+            await callback.message.edit_reply_markup(
+                reply_markup=media_keyboard(video_id, include_audio_btn=False)
+            )
+        except Exception:
+            pass
+    except Exception as e:
+        await callback.answer(f"❌ ပို့မရပါ: {e}", show_alert=True)
+        return
+    finally:
+        try:
+            os.remove(audio_path)
+        except Exception:
+            pass
+
+
+# ──────────────────────────────────────────────
+# Callback: Edit Caption — @UseMasterUpdate
+# ──────────────────────────────────────────────
+@app.on_callback_query(filters.regex(r"^edit_cap:"))
+async def cb_edit_caption(client: Client, callback: CallbackQuery) -> None:
+    user_id = callback.from_user.id
+    pending_edits[user_id] = (callback.message.chat.id, callback.message.id)
+    await callback.answer()
+    await callback.message.reply_text(
+        "✏️ **Caption အသစ် ရိုက်ထည့်ပါ**\n\n"
+        "စာသားအသစ်ကို ဒီ message ကို reply ပြန်ပြီး ပို့ပေးပါ။\n"
+        "(Cancel လုပ်ချင်ရင် /cancel ရိုက်ပါ)\n\n"
+        f"— {CREDIT}"
+    )
+
+
+# ──────────────────────────────────────────────
+# Callback: Post to Channel — @UseMasterUpdate
+# ──────────────────────────────────────────────
+@app.on_callback_query(filters.regex(r"^post_ch:"))
+async def cb_post_channel(client: Client, callback: CallbackQuery) -> None:
+    if not CHANNEL_ID:
+        await callback.answer(
+            "❌ CHANNEL_ID မသတ်မှတ်ရသေးပါ။ .env မှာ ထည့်ပေးပါ။",
+            show_alert=True,
+        )
+        return
+
+    msg = callback.message
+    await callback.answer("📢 Channel သို့ ပို့နေပါသည်...")
+
+    try:
+        # Copy the media message (video or audio) to channel with current caption
+        await client.copy_message(
+            chat_id=int(CHANNEL_ID),
+            from_chat_id=msg.chat.id,
+            message_id=msg.id,
+        )
+        await callback.answer("✅ Channel သို့ အောင်မြင်စွာ တင်ပြီးပါပြီ!", show_alert=True)
+    except Exception as e:
+        await callback.answer(f"❌ Post မရပါ: {e}", show_alert=True)
+
+
+# ──────────────────────────────────────────────
+# Receive new caption text after Edit button — @UseMasterUpdate
+# ──────────────────────────────────────────────
+@app.on_message(filters.text & ~filters.command(["start", "help", "cancel"]))
+async def on_caption_edit_text(client: Client, message: Message) -> None:
+    user_id = message.from_user.id if message.from_user else 0
+    if user_id not in pending_edits:
+        return
+
+    chat_id, msg_id = pending_edits.pop(user_id)
+    new_caption = (message.text or "").strip()
+    if not new_caption:
+        await message.reply_text("❌ စာသားအလွတ် မရပါ။ ထပ်ကြိုးစားပါ။")
+        return
+
+    try:
+        # reply_markup မပို့ရင် ရှိပြီးသား buttons တွေ မပျောက်ဘူး
+        await client.edit_message_caption(
+            chat_id=chat_id,
+            message_id=msg_id,
+            caption=new_caption,
+        )
+        await message.reply_text(f"✅ Caption အား ပြင်ဆင်ပြီးပါပြီ!\n\n— {CREDIT}")
+    except Exception as e:
+        await message.reply_text(f"❌ Caption ပြင်မရပါ:\n`{e}`\n\n— {CREDIT}")
+
+
+@app.on_message(filters.command("cancel"))
+async def cmd_cancel(_, message: Message):
+    user_id = message.from_user.id if message.from_user else 0
+    if user_id in pending_edits:
+        del pending_edits[user_id]
+        await message.reply_text(f"❌ Edit ကို ပယ်ဖျက်လိုက်ပါပြီ။\n\n— {CREDIT}")
+    else:
+        await message.reply_text(f"ℹ️ Edit လုပ်နေတာ မရှိပါ။\n\n— {CREDIT}")
+
 
 # ──────────────────────────────────────────────
 # Commands — @UseMasterUpdate
@@ -425,6 +623,9 @@ async def cmd_start(_, message: Message):
         "⚡ **အင်္ဂါရပ်များ -**\n"
         "• ဒေါင်းလုဒ်ပြုလုပ်ရာတွင် အလွန်မြန်ဆန်ခြင်း\n"
         "• HD / SD ရုပ်ထွက် HD Quality ရရှိနိုင်ခြင်း\n"
+        "• **🔊 အသံ Download** — Video အောက်က button နဲ့ audio ဆွဲယူနိုင်\n"
+        "• **✏️ Edit** — Caption စာသား ပြင်ဆင်နိုင်\n"
+        "• **📢 Post** — Channel ပေါ် တင်နိုင်\n"
         "• ၁၀၀% အခမဲ့ အသုံးပြုနိုင်ခြင်း\n\n"
         f"— {CREDIT}"
     )
@@ -444,7 +645,7 @@ async def cmd_help(_, message: Message):
     )
 
 # ──────────────────────────────────────────────
-# Run — @UseMasterUpdate
+# Run — 
 # ──────────────────────────────────────────────
 if __name__ == "__main__":
     print(f"🚀 Starting | {CREDIT}")
